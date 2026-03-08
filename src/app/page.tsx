@@ -1,65 +1,243 @@
-import Image from "next/image";
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useAppStore } from '../lib/store';
+import { getTierForLevel, getXpProgressForCurrentLevel } from '../lib/engine';
+import { SHOP_ITEMS } from '../lib/data';
 
 export default function Home() {
+  const [mounted, setMounted] = useState(false);
+  const [activeTab, setActiveTab] = useState<'quest' | 'shop'>('quest');
+  const [previewItem, setPreviewItem] = useState<string | null>(null);
+  const [coinsList, setCoinsList] = useState<{ id: number; x: number; y: number }[]>([]);
+  const [showLevelUp, setShowLevelUp] = useState(false);
+
+  const {
+    xp, qp, level, energy, quests, unlockedItems, equippedItems,
+    lastLevelUp, lastQpEarned, completeQuest, buyItem, equipItem, unequipItem, tickEnergy
+  } = useAppStore();
+
+  useEffect(() => {
+    setMounted(true);
+    const interval = setInterval(() => tickEnergy(), 60000); // Check energy every minute
+    return () => clearInterval(interval);
+  }, [tickEnergy]);
+
+  // Handle Level Up Animation
+  useEffect(() => {
+    if (lastLevelUp > 0 && mounted) {
+      setShowLevelUp(true);
+      setTimeout(() => setShowLevelUp(false), 2000);
+    }
+  }, [lastLevelUp, mounted]);
+
+  // Handle QP Earned Animation
+  useEffect(() => {
+    if (lastQpEarned > 0 && mounted) {
+      const newCoin = { id: Date.now(), x: Math.random() * 50 + 20, y: Math.random() * 20 + 80 };
+      setCoinsList(prev => [...prev, newCoin]);
+      setTimeout(() => {
+        setCoinsList(prev => prev.filter(c => c.id !== newCoin.id));
+      }, 1500);
+    }
+  }, [lastQpEarned, mounted]);
+
+  // Apply Background Theme
+  useEffect(() => {
+    if (equippedItems.Background === 'bg_studyroom') {
+      document.body.classList.add('theme-studyroom');
+    } else {
+      document.body.classList.remove('theme-studyroom');
+    }
+  }, [equippedItems.Background]);
+
+  if (!mounted) return null;
+
+  const currentTier = getTierForLevel(level);
+  const xpProgress = getXpProgressForCurrentLevel(xp);
+
+  // Derive display equipment (includes preview)
+  const displayEquipment = { ...equippedItems };
+  if (previewItem) {
+    const item = SHOP_ITEMS.find(i => i.id === previewItem);
+    if (item) {
+      displayEquipment[item.category] = item.id;
+    }
+  }
+
+  const getEmojiForItemId = (id?: string) => {
+    if (!id) return null;
+    return SHOP_ITEMS.find(i => i.id === id)?.icon;
+  };
+
+  const handleQuestComplete = (e: React.MouseEvent, questId: string) => {
+    if (energy <= 0) {
+      alert('에너지가 부족합니다! 잠시 휴식하세요.');
+      return;
+    }
+    completeQuest(questId);
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="dashboard-grid">
+      {/* Notifications */}
+      {showLevelUp && (
+        <div className="levelup-overlay">
+          <div className="levelup-text">Level Up!</div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      )}
+
+      {coinsList.map(coin => (
+        <div
+          key={coin.id}
+          className="anim-coin"
+          style={{ left: `${coin.x}%`, bottom: `${coin.y}%` }}
+        >
+          +QP
         </div>
-      </main>
+      ))}
+
+      {/* Left Panel: Avatar & Stats */}
+      <div className="panel">
+        <div className="panel-title">내 아바타</div>
+
+        <div className="avatar-container">
+          <div className="tier-name">{currentTier.name}</div>
+
+          <div className="avatar-emoji">{currentTier.icon}</div>
+
+          {displayEquipment.Accessory && (
+            <div className="avatar-accessory">{getEmojiForItemId(displayEquipment.Accessory)}</div>
+          )}
+          {displayEquipment.Tool && (
+            <div className="avatar-tool">{getEmojiForItemId(displayEquipment.Tool)}</div>
+          )}
+          {displayEquipment.Skin && (
+            <div className="avatar-skin">{getEmojiForItemId(displayEquipment.Skin)}</div>
+          )}
+        </div>
+
+        <div className="stats-row">
+          <div>Lv. {level}</div>
+          <div className="qp-text"><span>🪙</span> {qp} QP</div>
+        </div>
+
+        <div className="xp-container">
+          <div className="xp-labels">
+            <span>XP ({Math.floor(xpProgress.currentLevelXp)} / {xpProgress.xpRequiredForNextLevel})</span>
+            <span>{Math.floor(xpProgress.percentage)}%</span>
+          </div>
+          <div className="xp-bar-bg">
+            <div className="xp-bar-fill" style={{ width: `${xpProgress.percentage}%` }}></div>
+          </div>
+        </div>
+
+        <div className="stats-row" style={{ marginTop: '24px' }}>
+          <div>에너지 ⚡</div>
+          <div className="energy-text">{energy} / 5</div>
+        </div>
+      </div>
+
+      {/* Right Panel: Content */}
+      <div className="panel">
+        <div className="tabs">
+          <button
+            className={`tab ${activeTab === 'quest' ? 'active' : ''}`}
+            onClick={() => setActiveTab('quest')}
+          >
+            퀘스트
+          </button>
+          <button
+            className={`tab ${activeTab === 'shop' ? 'active' : ''}`}
+            onClick={() => setActiveTab('shop')}
+          >
+            상점
+          </button>
+        </div>
+
+        {activeTab === 'quest' && (
+          <div>
+            <div className="panel-title">오늘의 퀘스트</div>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '16px', fontSize: '0.9rem' }}>
+              퀘스트를 완료하고 XP와 무작위 QP를 획득하세요!
+            </p>
+            <div className="quest-list">
+              {quests.map(quest => (
+                <div
+                  key={quest.id}
+                  className={`quest-item ${quest.isCompleted ? 'completed' : ''}`}
+                  onClick={(e) => !quest.isCompleted && handleQuestComplete(e, quest.id)}
+                >
+                  <div className="quest-title">{quest.title}</div>
+                  <div className="quest-reward">+{quest.baseXp} XP</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: '24px', fontSize: '0.8rem', color: '#666', textAlign: 'center' }}>
+              (테스트용: 새로고침하면 퀘스트가 초기화되지 않습니다. Zustand가 로컬스토리지 유지)
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'shop' && (
+          <div>
+            <div className="panel-title">아이템 상점</div>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '16px', fontSize: '0.9rem' }}>
+              아이템을 클릭하여 미리보기를 확인하세요. QP를 모아 구매할 수 있습니다.
+            </p>
+            <div className="shop-grid">
+              {SHOP_ITEMS.map(item => {
+                const isUnlocked = unlockedItems.includes(item.id);
+                const isEquipped = equippedItems[item.category] === item.id;
+                const canAfford = qp >= item.price;
+                const isPreview = previewItem === item.id;
+
+                return (
+                  <div
+                    key={item.id}
+                    className={`shop-item ${isPreview ? 'preview-mode' : ''}`}
+                    onClick={() => setPreviewItem(isPreview ? null : item.id)}
+                  >
+                    <div className="shop-item-icon">{item.icon}</div>
+                    <div className="shop-item-name">{item.name}</div>
+                    <div className="shop-item-desc">{item.description}</div>
+                    {!isUnlocked && <div className="shop-item-price">🪙 {item.price}</div>}
+
+                    <div style={{ marginTop: 'auto' }}>
+                      {isUnlocked ? (
+                        <button
+                          className={`btn ${isEquipped ? 'equipped' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            isEquipped ? unequipItem(item.category) : equipItem(item);
+                            setPreviewItem(null);
+                          }}
+                        >
+                          {isEquipped ? '해제하기' : '장착하기'}
+                        </button>
+                      ) : (
+                        <button
+                          className="btn"
+                          disabled={!canAfford}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (buyItem(item)) {
+                              setPreviewItem(null);
+                            }
+                          }}
+                        >
+                          {canAfford ? '구매하기' : 'QP 부족'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
